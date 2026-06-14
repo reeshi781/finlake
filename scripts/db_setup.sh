@@ -1,18 +1,16 @@
-# Copy to .env before starting Docker
-cp .env.example .env
+#!/usr/bin/env bash
+set -euo pipefail
 
-# Start PostgreSQL + pgAdmin
+cd "$(dirname "$0")/.."
+
+if [[ ! -f .env ]]; then
+  cp .env.example .env
+fi
+
 docker compose up -d
 
-# Install Python deps (from project root)
 source .venv/bin/activate
 pip install -r requirements.txt
 
-# Seed tickers + apply schema
 PYTHONPATH=. python src/load/init_db.py
-
-# Extract company details from DB tickers → company_master table
-PYTHONPATH=. python src/extract/company_details.py
-
-# Stop containers
-docker compose down
+PYTHONPATH=. python src/pipeline/run.py
