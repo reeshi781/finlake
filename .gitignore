@@ -14,5 +14,11 @@ __pycache__/
 # Environment variables
 .env
 
-# Mac
-.DS_Store
+# Local database files
+data/*.db
+data/*.duckdb
+
+# Spark / pipeline outputs
+data/processed/
+spark-warehouse/
+derby.log
