@@ -1,45 +1,14 @@
-"""Load extracted company data into PostgreSQL company_master table."""
+"""Load company data from CSV/Parquet into PostgreSQL."""
 
 import argparse
 from pathlib import Path
 
 import pandas as pd
-from sqlalchemy import create_engine, text
 
-from src.config.db import get_database_url
+from src.load.company_master import COMPANY_MASTER_COLUMNS, upsert_company_master
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_DATA_PATH = PROJECT_ROOT / "data" / "processed" / "company_master.csv"
-
-UPSERT_SQL = text(
-    """
-    INSERT INTO company_master (
-        ticker, company_name, short_name, sector, industry, country, city,
-        currency, exchange, website, logo_url, employee_count,
-        market_cap, enterprise_value, business_summary
-    ) VALUES (
-        :ticker, :company_name, :short_name, :sector, :industry, :country, :city,
-        :currency, :exchange, :website, :logo_url, :employee_count,
-        :market_cap, :enterprise_value, :business_summary
-    )
-    ON CONFLICT (ticker) DO UPDATE SET
-        company_name = EXCLUDED.company_name,
-        short_name = EXCLUDED.short_name,
-        sector = EXCLUDED.sector,
-        industry = EXCLUDED.industry,
-        country = EXCLUDED.country,
-        city = EXCLUDED.city,
-        currency = EXCLUDED.currency,
-        exchange = EXCLUDED.exchange,
-        website = EXCLUDED.website,
-        logo_url = EXCLUDED.logo_url,
-        employee_count = EXCLUDED.employee_count,
-        market_cap = EXCLUDED.market_cap,
-        enterprise_value = EXCLUDED.enterprise_value,
-        business_summary = EXCLUDED.business_summary,
-        updated_at = NOW()
-    """
-)
 
 
 def load_company_master(data_path: Path) -> int:
@@ -51,44 +20,22 @@ def load_company_master(data_path: Path) -> int:
     else:
         df = pd.read_csv(data_path)
 
-    expected_columns = {
-        "ticker",
-        "company_name",
-        "short_name",
-        "sector",
-        "industry",
-        "country",
-        "city",
-        "currency",
-        "exchange",
-        "website",
-        "logo_url",
-        "employee_count",
-        "market_cap",
-        "enterprise_value",
-        "business_summary",
-    }
-    missing = expected_columns - set(df.columns)
+    expected = set(COMPANY_MASTER_COLUMNS)
+    missing = expected - set(df.columns)
     if missing:
         raise ValueError(f"Missing columns in data file: {sorted(missing)}")
 
-    records = df[list(expected_columns)].to_dict(orient="records")
-    engine = create_engine(get_database_url())
-
-    with engine.begin() as conn:
-        conn.execute(UPSERT_SQL, records)
-
-    print(f"Loaded {len(records)} rows into company_master from {data_path}")
-    return len(records)
+    records = df[COMPANY_MASTER_COLUMNS].to_dict(orient="records")
+    return upsert_company_master(records)
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Load company_master data into PostgreSQL")
+    parser = argparse.ArgumentParser(description="Load company_master data from file")
     parser.add_argument(
         "--path",
         type=Path,
         default=DEFAULT_DATA_PATH,
-        help="Path to CSV or Parquet file with company data",
+        help="Path to CSV or Parquet file",
     )
     args = parser.parse_args()
     load_company_master(args.path)

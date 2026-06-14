@@ -23,12 +23,12 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Verify Python
-        run: python --version
-
       - name: Syntax Check
         run: |
           python -m py_compile src/extract/company_details.py
           python -m py_compile src/load/init_db.py
           python -m py_compile src/load/load_company_master.py
+          python -m py_compile src/load/company_master.py
+          python -m py_compile src/load/tickers.py
+          python -m py_compile src/pipeline/run.py
           python -m py_compile src/config/db.py
