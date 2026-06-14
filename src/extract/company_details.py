@@ -1,61 +1,16 @@
-"""Read tickers from DB, extract company details via yfinance, upsert into company_master."""
+"""Extract company details from yfinance (no database writes)."""
 
-import sys
 import warnings
-from pathlib import Path
 from time import sleep
 
+import pandas as pd
 import yfinance as yf
-from sqlalchemy import create_engine, text
-
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
-
-from src.config.db import get_database_url
 
 warnings.filterwarnings("ignore")
-
-UPSERT_SQL = text(
-    """
-    INSERT INTO company_master (
-        ticker, company_name, short_name, sector, industry, country, city,
-        currency, exchange, website, logo_url, employee_count,
-        market_cap, enterprise_value, business_summary
-    ) VALUES (
-        :ticker, :company_name, :short_name, :sector, :industry, :country, :city,
-        :currency, :exchange, :website, :logo_url, :employee_count,
-        :market_cap, :enterprise_value, :business_summary
-    )
-    ON CONFLICT (ticker) DO UPDATE SET
-        company_name = EXCLUDED.company_name,
-        short_name = EXCLUDED.short_name,
-        sector = EXCLUDED.sector,
-        industry = EXCLUDED.industry,
-        country = EXCLUDED.country,
-        city = EXCLUDED.city,
-        currency = EXCLUDED.currency,
-        exchange = EXCLUDED.exchange,
-        website = EXCLUDED.website,
-        logo_url = EXCLUDED.logo_url,
-        employee_count = EXCLUDED.employee_count,
-        market_cap = EXCLUDED.market_cap,
-        enterprise_value = EXCLUDED.enterprise_value,
-        business_summary = EXCLUDED.business_summary,
-        updated_at = NOW()
-    """
-)
 
 
 def get_logo_url(ticker: str) -> str:
     return f"https://financialmodelingprep.com/image-stock/{ticker}.png"
-
-
-def read_tickers() -> list[str]:
-    engine = create_engine(get_database_url())
-    with engine.connect() as conn:
-        rows = conn.execute(text("SELECT ticker FROM tickers")).fetchall()
-    return [row[0] for row in rows]
 
 
 def get_company_details(ticker: str) -> dict:
@@ -79,7 +34,7 @@ def get_company_details(ticker: str) -> dict:
     }
 
 
-def get_company_details_from_list(
+def extract_companies(
     tickers: list[str],
     delay: float = 0.5,
 ) -> list[dict]:
@@ -95,25 +50,8 @@ def get_company_details_from_list(
     return companies
 
 
-def save_company_details(companies: list[dict]) -> int:
-    if not companies:
-        print("No companies to save.")
-        return 0
-
-    engine = create_engine(get_database_url())
-    with engine.begin() as conn:
-        conn.execute(UPSERT_SQL, companies)
-
-    print(f"Saved {len(companies)} rows to company_master")
-    return len(companies)
-
-
-def main() -> None:
-    tickers = read_tickers()
-    print(f"Found {len(tickers)} tickers")
-    companies = get_company_details_from_list(tickers)
-    save_company_details(companies)
-
-
-if __name__ == "__main__":
-    main()
+def extract_to_dataframe(
+    tickers: list[str],
+    delay: float = 0.5,
+) -> pd.DataFrame:
+    return pd.DataFrame(extract_companies(tickers, delay=delay))
